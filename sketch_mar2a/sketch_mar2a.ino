@@ -1,3 +1,5 @@
+#include <Servo.h>
+
 //Numpad
 int row1 = 2;
 int row2 = 3;
@@ -21,26 +23,53 @@ char passCode[4];
 int charTracker = 0;
 
 int attemptTracker = 0;
+
+//LED
+int red = 10;
+int green = 12;
+int blue = 11;
+
+//Buzzer
+int buzzer = A0;
+
+//Servo
+int servo = 13;
+Servo myServo;
+
+
 void setup() {
   for (int i = 0; i < 4; i++) {
     pinMode(rows[i], OUTPUT);
     digitalWrite(rows[i], HIGH);  // Set rows HIGH initially
     pinMode(cols[i], INPUT_PULLUP);
   }
+
+  //;ed pins
+  pinMode(red, OUTPUT);
+  pinMode(green, OUTPUT);
+  pinMode(blue, OUTPUT);
+
+  pinMode(buzzer, OUTPUT);
+
+  myServo.attach(servo);
+  myServo.write(0);
+
   Serial.begin(9600);
 }
 
-void scanForMatrixInput(int duration) {
+void scanForMatrixInput() {
   unsigned long startTime = millis();  // Record the start time
   int row;
   int col;
 
-  while (millis() - startTime < duration) {
+  while (true) {
+    signalIdleLed();
     for (int i = 0; i < 4; i++) {
       digitalWrite(rows[i], LOW);
 
       for (int j = 0; j < 4; j++) {
         if (digitalRead(cols[j]) == LOW) {
+          tone(buzzer, 1000, 5);
           Serial.print("Row ");
           Serial.print(i + 1);
           row = i + 1;
@@ -64,8 +93,10 @@ void recordCode(char codeKey) {
     Serial.println("Checking Code...");
     if (validateCode(passCode)) {
       Serial.println("Correct!");
+      signalCorrectPassword();
     } else {
       Serial.println("Nop!!");
+      signalWrongPassword();
       resetPassCodeValues();
     }
   }
@@ -156,8 +187,8 @@ bool scanForInit() {
 
   if (attemptTracker == 3) {
     while (true) {
-      Serial.println("Blocked!!");  // At this point a hardset on the arduino will reboot the lock
-      delay(500);
+      Serial.println("Blocked!!");
+      blockedLedPattern();
     }
   }
 
@@ -173,8 +204,7 @@ bool scanForInit() {
           delay(200);  // Simple debounce
           if (row == targetRow && col == targetCol) {
             Serial.println("Enter Code:");
-            scanForMatrixInput(10000);
-            Serial.println("Timed Out!");
+            scanForMatrixInput();
             row = 0;
             col = 0;
           }
@@ -185,6 +215,80 @@ bool scanForInit() {
   }
 }
 
+// LED STATES //
+
+//Blocked
+void blockedLedPattern() {
+  digitalWrite(red, 255);
+  analogWrite(buzzer, 255);
+  tone(buzzer, 400, 300);
+  delay(200);
+  digitalWrite(red, 0);
+  delay(500);
+}
+
+//Wrong Passcode
+void signalWrongPassword() {
+  digitalWrite(blue, 0);
+  tone(buzzer, 300, 500);
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(red, 255);
+    delay(200);
+    digitalWrite(red, 0);
+    delay(200);
+  }
+}
+
+//Correct
+void signalCorrectPassword() {
+  digitalWrite(blue, 0);
+  tone(buzzer, 1500, 150);
+
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(green, 225);
+    delay(200);
+    digitalWrite(green, 0);
+    delay(200);
+  }
+
+  attemptTracker = 0;
+  openDoor();
+  resetPassCodeValues();
+}
+
+//Idle
+void signalIdleLed() {
+  digitalWrite(blue, 255);
+}
+
+void openDoor() {
+
+  Serial.println("Opening...!");
+
+  for (int i = 0; i < 90; i++) {
+    myServo.write(i);
+    digitalWrite(blue, 255);
+    delay(100);
+    digitalWrite(blue, 0);
+    delay(100);
+  }
+
+  digitalWrite(green, 255);
+  delay(5000);
+  digitalWrite(green, 0);
+  Serial.println("Closing...");
+
+  for (int i = 90; i > 0; i--) {
+    myServo.write(i);
+    digitalWrite(red, 255);
+    delay(100);
+    digitalWrite(red, 0);
+    delay(100);
+  }
+}
+
+
 void loop() {
   scanForInit();
 }
+
